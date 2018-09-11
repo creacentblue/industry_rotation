@@ -1,0 +1,5 @@
+strategy1：
+PEG_Data.pkl为原始算法得出
+PEG_Data_1.pkl为改进算法得出（已弃用）
+strategy2:
+NPF_Growth.pkl 

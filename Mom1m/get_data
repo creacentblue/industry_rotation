@@ -1,0 +1,100 @@
+# -*- coding:utf-8 -*-
+import datetime
+# import math
+import numpy as np
+import pandas as pd
+import pymssql
+# from pathlib import  Path
+# import os
+# import yaml
+import pickle
+# from cache import has_cache, load_cache, save_cache, global_cache_dir
+# from tantra.utils.symbol import code2symbol
+# from tantra.logger import logger
+# from tantra.data.gta import GtaDB
+import csv
+
+
+# 数据库连接
+ip = "192.168.0.101"
+port = 1433
+user = 'WANGLEI'
+password = '425189'
+
+
+# 查询函数
+def query(cmd,db, as_dict):
+    with pymssql.connect(
+            server=ip, port=port, user=user, password=password, database=db) as conn:
+        with conn.cursor(as_dict=as_dict) as cursor:
+            cursor.execute(cmd)
+            return [row for row in cursor]
+
+
+# 查询语句设置与执行
+start_date=datetime.datetime.strptime("2016-06-30", "%Y-%m-%d")
+end_date = datetime.datetime.strptime("2018-06-30", "%Y-%m-%d")
+cmd = ' '.join((
+    "SELECT TRADINGDATE,SYMBOL,FACTORVALUE,STANDARDIZEVALUE ",
+    "from dbo.QF_Momentum1M",
+    "WHERE TRADINGDATE>='{:s}' and".format(str(start_date)),
+    "TRADINGDATE<='{:s}'".format(str(end_date)),
+    "order by TRADINGDATE asc, STANDARDIZEVALUE desc"
+))
+Mom1mData=query(cmd, "GTA_QF_V3", True)
+
+
+# 获取沪深300symbol值
+csv_reader = csv.reader(open('HS300.csv'))
+HS300_symbols=[]
+for row in csv_reader:
+    HS300_symbols.append(row[1])
+print(HS300_symbols)
+
+
+# 从查询结果中筛选出HS300数据
+HS300_datas=[]
+for data in Mom1mData:
+    if data['SYMBOL'] in HS300_symbols:
+        HS300_datas.append(data)
+
+
+# 得到每月的第一个交易日
+month_start=[]
+for j in range(len(HS300_datas)-1):
+    pre=datetime.datetime.strptime(HS300_datas[j]['TRADINGDATE'], "%Y-%m-%d %H:%M:%S.%f0").month
+    cur=datetime.datetime.strptime(HS300_datas[j+1]['TRADINGDATE'], "%Y-%m-%d %H:%M:%S.%f0").month
+    if pre!=cur:
+        month_start.append(HS300_datas[j+1]["TRADINGDATE"])
+
+
+# 筛选出HS300每月第一个交易日的数据
+HS300_datas_for_month={}
+for i in month_start:
+    HS300_list = []
+    for data in HS300_datas:
+        if data['TRADINGDATE'] in i:
+            HS300_list.append(data)
+    j=i[:-17]  # 将交易日期的格式标准化为日期
+    HS300_datas_for_month[j]=HS300_list
+
+
+# 得到的结果为字典结构
+pickle.dump(HS300_datas_for_month, open('HS300_datas_for_month_dict.pkl', 'wb'))
+
+
+# 获取每周第一天的日期
+start_date = datetime.datetime.strptime("2016-06-30", "%Y-%m-%d")
+end_date = datetime.datetime.strptime("2018-06-30", "%Y-%m-%d")
+cmd = ' '.join((
+    "select CalendarDate,WeekDay",
+    "from dbo.STK_CALENDARD",
+    "where EXCHANGECODE = 'sse' and ISOPEN  = 'Y' and ",
+    "CalendarDate>='{:s}' and".format(str(start_date)),
+    "CalendarDate<='{:s}'".format(str(end_date)),
+    "order by CALENDARDATE"
+))
+WeekDates = query(cmd, "GTA_QIA_QDB", True)
+pickle.dump(WeekDates, open('week_day.pkl', 'wb'))
+
+
